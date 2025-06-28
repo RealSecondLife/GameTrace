@@ -18,6 +18,23 @@ GameTrace is a lightweight, user-friendly tool designed for recording gameplay w
 
 ## Installation
 
+### Install from source code
+
+First, download ffmpeg from `https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.0.2-full_build.7z`
+
+Second, unzip the ffmpeg file and then copy ffmpeg.exe to the root dir.
+
+Finally, execute the following command to pack the .exe program
+
+```bash
+pip install pynput numpy psutil
+pip install pyinstaller
+pyinstaller recorder_app.py --onefile --add-binary "ffmpeg.exe;."
+```
+
+
+
+
 ### Windows
 
 1. Download the latest release from [Releases](https://github.com/yourusername/GameTrace/releases).  
