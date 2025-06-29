@@ -60,9 +60,16 @@ def start_input_listeners():
             "button": str(button),
             "time": time.time()
         })
+    
+    def on_move(x, y):
+        write_event({
+            "type": "mouse_move",
+            "position": (x, y),
+            "time": time.time()
+        })
 
     threading.Thread(target=lambda: keyboard.Listener(on_press=on_key_press, on_release=on_key_release).run(), daemon=True).start()
-    threading.Thread(target=lambda: mouse.Listener(on_click=on_click).run(), daemon=True).start()
+    threading.Thread(target=lambda: mouse.Listener(on_click=on_click, on_move=on_move).run(), daemon=True).start()
 
 
 ############################## 屏幕录制
