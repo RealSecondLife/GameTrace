@@ -3,18 +3,21 @@ import sys
 import time
 import json
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import messagebox, filedialog
 import threading
 import subprocess
 from pynput import keyboard, mouse
 import ctypes
 import datetime
-
+import shutil
+import re
 
 video_filename = "screen_recording.mp4"
 event_filename = "events.jsonl"
 ffmpeg_process = None
 recording = False
+ffmpeg_path_var = None  # 新增全局变量
+storage_path_var = None  # 新增全局变量
 
 # 获取临时文件名
 def generate_filename():
@@ -28,10 +31,25 @@ def get_screen_size():
     height = user32.GetSystemMetrics(1)
     return width, height
 
+# 获取 ffmpeg 路径,如果本地路径没有则在系统 PATH 中查找
 def get_ffmpeg_path():
+    # 优先用界面上的路径
+    if ffmpeg_path_var is not None:
+        path = ffmpeg_path_var.get()
+        if os.path.exists(path):
+            return path
+    # 自动查找
     if getattr(sys, 'frozen', False):
-        return os.path.join(sys._MEIPASS, "ffmpeg.exe")
-    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+        local_path = os.path.join(sys._MEIPASS, "ffmpeg.exe")
+    else:
+        local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+    if os.path.exists(local_path):
+        return local_path
+    # 检查系统PATH
+    ffmpeg_in_path = shutil.which("ffmpeg")
+    if ffmpeg_in_path:
+        return ffmpeg_in_path
+    return ""
 
 def write_event(event):
     with open(event_filename, "a", encoding="utf-8") as f:
@@ -73,17 +91,55 @@ def start_input_listeners():
 
 
 ############################## 屏幕录制
+def get_speaker_device():
+    """
+    自动检测dshow下的扬声器设备名称，优先包含'立体声混音'、'stereo mix'、'speaker'或'扬声器'的设备
+    """
+    try:
+        result = subprocess.run(
+            [get_ffmpeg_path(), '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+            encoding='utf-8'
+        )
+        devices = []
+        for line in result.stderr.splitlines():
+            # 只匹配音频设备
+            m = re.search(r'\[dshow @ [^\]]+\] +\"(.+?)\"', line)
+            if m and 'audio devices' in line.lower():
+                devices.clear()  # 新一组音频设备
+            elif m:
+                devices.append(m.group(1))
+        # 优先选立体声混音
+        for dev in devices:
+            if '立体声混音' in dev or 'stereo mix' in dev.lower():
+                return dev
+        # 再选扬声器
+        for dev in devices:
+            if '扬声器' in dev or 'speaker' in dev.lower():
+                return dev
+        # 若没有，返回第一个音频设备
+        if devices:
+            return devices[0]
+    except Exception as e:
+        print("自动检测扬声器失败：", e)
+    # 没有检测到任何音频设备时返回空字符串
+    return ''
+
 def start_recording():
     global ffmpeg_process, recording, video_filename, event_filename
     if recording:
         return
-    if not os.path.exists(get_ffmpeg_path()):
-        messagebox.showerror("错误", "找不到 ffmpeg.exe，请将其放在程序目录下")
+    ffmpeg_path = get_ffmpeg_path()
+    if not os.path.exists(ffmpeg_path):
+        ffmpeg_status_var.set("未能找到 ffmpeg.exe，请手动选择")
         return
-    
+
+    storage_path = get_storage_path()
     base_name = generate_filename()
-    video_filename = f"{base_name}.mp4"
-    event_filename = f"{base_name}.jsonl"
+    video_filename = os.path.join(storage_path, f"{base_name}.mp4")
+    event_filename = os.path.join(storage_path, f"{base_name}.jsonl")
 
     # 删除同名文件
     for f in [video_filename, event_filename]:
@@ -91,17 +147,21 @@ def start_recording():
             os.remove(f)
 
     width, height = get_screen_size()
+    speaker_device = get_speaker_device()
     ffmpeg_cmd = [
-        get_ffmpeg_path(),
+        ffmpeg_path,
         '-y',
         '-f', 'gdigrab',
         '-framerate', '8',
         '-video_size', f'{width}x{height}',
         '-i', 'desktop',
+        '-f', 'dshow',
+        '-i', f'audio={speaker_device}',
         '-vf', 'format=yuv420p',
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-crf', '23',
+        '-c:a', 'flac',  # 无损音频
         video_filename
     ]
 
@@ -127,22 +187,103 @@ def stop_recording():
                 print("关闭 ffmpeg 失败:", e)
         status_var.set("录制完成 ✔")
         messagebox.showinfo("录制结束", f"✅ 视频保存为：{video_filename}\n🖱️ 键鼠事件记录：{event_filename}")
+        app.quit()  # 录制结束后退出主程序
 
     threading.Thread(target=finalize).start()
 
+def browse_ffmpeg():
+    path = filedialog.askopenfilename(
+        title="请选择 ffmpeg.exe",
+        filetypes=[("ffmpeg 可执行文件", "ffmpeg.exe"), ("所有文件", "*.*")]
+    )
+    if path:
+        ffmpeg_path_var.set(path)
+        ffmpeg_status_var.set("已选择 ffmpeg 路径")
+    else:
+        if not ffmpeg_path_var.get():
+            ffmpeg_status_var.set("未能自动找到 ffmpeg，请手动选择")
+
+def auto_fill_ffmpeg_path():
+    # 自动查找并填入
+    if getattr(sys, 'frozen', False):
+        local_path = os.path.join(sys._MEIPASS, "ffmpeg.exe")
+    else:
+        local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
+    if os.path.exists(local_path):
+        ffmpeg_path_var.set(local_path)
+        ffmpeg_status_var.set("已在本地路径中找到 ffmpeg")
+        return
+    ffmpeg_in_path = shutil.which("ffmpeg")
+    if ffmpeg_in_path:
+        ffmpeg_path_var.set(ffmpeg_in_path)
+        ffmpeg_status_var.set("已在系统PATH中找到 ffmpeg")
+        return
+    ffmpeg_path_var.set("")
+    ffmpeg_status_var.set("未能自动找到 ffmpeg.exe，请手动选择")
+
+def get_storage_path():
+    if storage_path_var is not None:
+        path = storage_path_var.get()
+        if os.path.isdir(path):
+            return path
+    # 默认 data 文件夹
+    default_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    if not os.path.exists(default_path):
+        os.makedirs(default_path)
+    return default_path
+
+def browse_storage_path():
+    path = filedialog.askdirectory(
+        title="请选择存储文件夹"
+    )
+    if path:
+        storage_path_var.set(path)
+
 def create_gui():
-    global status_var
+    global status_var, ffmpeg_path_var, ffmpeg_status_var, storage_path_var, app  # 增加 app
     app = tk.Tk()
     app.title("游戏录制器")
-    app.geometry("300x160")
+    app.geometry("600x320")
     app.resizable(False, False)
 
-    tk.Button(app, text="开始录制", font=("Arial", 14), command=start_recording).pack(pady=10)
-    tk.Button(app, text="停止录制", font=("Arial", 14), command=stop_recording).pack(pady=10)
+    # 外层容器Frame
+    main_frame = tk.Frame(app)
+    main_frame.place(relx=0.5, rely=0.5, anchor="center")
 
+    # ffmpeg 路径
+    ffmpeg_path_var = tk.StringVar()
+    ffmpeg_status_var = tk.StringVar()
+    auto_fill_ffmpeg_path()
+    tk.Label(main_frame, text="ffmpeg 路径（可自动识别/手动选择）", font=("Arial", 12), anchor="w", justify="left").pack(anchor="w", padx=24, pady=(18, 0))
+    ffmpeg_row = tk.Frame(main_frame)
+    ffmpeg_row.pack(fill=tk.X, padx=18, pady=(2, 0))
+    ffmpeg_entry = tk.Entry(ffmpeg_row, textvariable=ffmpeg_path_var, width=54, font=("Arial", 11))
+    ffmpeg_entry.pack(side=tk.LEFT, padx=(0, 6))
+    tk.Button(ffmpeg_row, text="浏览...", font=("Arial", 11), width=8, command=browse_ffmpeg).pack(side=tk.LEFT)
+    
+    # 存储路径
+    storage_path_var = tk.StringVar()
+    default_data_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data")
+    if not os.path.exists(default_data_path):
+        os.makedirs(default_data_path)
+    storage_path_var.set(default_data_path)
+    tk.Label(main_frame, text="存储路径（默认 data 文件夹，可更改）", font=("Arial", 12), anchor="w", justify="left").pack(anchor="w", padx=24, pady=(14, 0))
+    storage_row = tk.Frame(main_frame)
+    storage_row.pack(fill=tk.X, padx=18, pady=(2, 0))
+    storage_entry = tk.Entry(storage_row, textvariable=storage_path_var, width=54, font=("Arial", 11))
+    storage_entry.pack(side=tk.LEFT, padx=(0, 6))
+    tk.Button(storage_row, text="浏览...", font=("Arial", 11), width=8, command=browse_storage_path).pack(side=tk.LEFT)
+
+    # 状态栏
     status_var = tk.StringVar()
     status_var.set("准备就绪")
-    tk.Label(app, textvariable=status_var, font=("Arial", 12)).pack(pady=5)
+    tk.Label(main_frame, textvariable=status_var, font=("Arial", 12), anchor="w").pack(fill=tk.X, pady=(18, 0), padx=18)
+
+    # 录制按钮行
+    btn_row = tk.Frame(main_frame)
+    btn_row.pack(pady=(18, 0))
+    tk.Button(btn_row, text="开始录制", font=("Arial", 14), width=16, command=start_recording).pack(side=tk.LEFT, padx=18)
+    tk.Button(btn_row, text="停止录制", font=("Arial", 14), width=16, command=stop_recording).pack(side=tk.LEFT, padx=18)
 
     app.mainloop()
 
