@@ -50,7 +50,7 @@ pyinstaller recorder_app.py --onefile --add-binary "ffmpeg.exe;."
 ## Usage
 
 1. Launch **GameTrace** on your system.  
-2. Follow GPT to open **立体混合声**/**Stereo Mix** in your device. If it was open, skip this step.
+2. Follow GPT to open **立体声混音**/**Stereo Mix** in your device. If it was open, skip this step.
 3. Select your desired recording options:  
    - Full-screen or region-specific recording.  
    - Enable/disable keyboard and mouse input logging.  
