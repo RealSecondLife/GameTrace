@@ -11,6 +11,7 @@ import ctypes
 import datetime
 import shutil
 import re
+import tkinter.ttk as ttk
 
 video_filename = "screen_recording.mp4"
 event_filename = "events.jsonl"
@@ -31,7 +32,7 @@ def get_screen_size():
     height = user32.GetSystemMetrics(1)
     return width, height
 
-# 获取 ffmpeg 路径,如果本地路径没有则在系统 PATH 中查找
+# 获取 ffmpeg 跂径,如果本地路径没有则在系统 PATH 中查找
 def get_ffmpeg_path():
     # 优先用界面上的路径
     if ffmpeg_path_var is not None:
@@ -91,41 +92,83 @@ def start_input_listeners():
 
 
 ############################## 屏幕录制
-def get_speaker_device():
+def list_audio_devices():
     """
-    自动检测dshow下的扬声器设备名称，优先包含'立体声混音'、'stereo mix'、'speaker'或'扬声器'的设备
+    返回所有可用的dshow音频设备列表
     """
     try:
-        result = subprocess.run(
+        proc = subprocess.Popen(
             [get_ffmpeg_path(), '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8'
         )
+        _, stderr = proc.communicate(timeout=5)
         devices = []
-        for line in result.stderr.splitlines():
+        audio_section = False
+        for line in stderr.splitlines():
             # 只匹配音频设备
             m = re.search(r'\[dshow @ [^\]]+\] +\"(.+?)\"', line)
             if m and 'audio devices' in line.lower():
                 devices.clear()  # 新一组音频设备
             elif m:
                 devices.append(m.group(1))
+        final_devices = []
         # 优先选立体声混音
         for dev in devices:
             if '立体声混音' in dev or 'stereo mix' in dev.lower():
-                return dev
+                final_devices.append(dev)
         # 再选扬声器
         for dev in devices:
             if '扬声器' in dev or 'speaker' in dev.lower():
-                return dev
-        # 若没有，返回第一个音频设备
-        if devices:
-            return devices[0]
+                final_devices.append(dev)
+        return final_devices
     except Exception as e:
-        print("自动检测扬声器失败：", e)
-    # 没有检测到任何音频设备时返回空字符串
-    return ''
+        print("音频设备枚举失败：", e)
+        return []
+
+# def get_speaker_device():
+#     """
+#     自动检测dshow下的扬声器设备名称，优先包含'立体声混音'、'stereo mix'、'speaker'或'扬声器'的设备
+#     """
+#     try:
+#         result = subprocess.run(
+#             [get_ffmpeg_path(), '-list_devices', 'true', '-f', 'dshow', '-i', 'dummy'],
+#             stdout=subprocess.PIPE,
+#             stderr=subprocess.PIPE,
+#             text=True,
+#             encoding='utf-8'
+#         )
+#         devices = []
+#         for line in result.stderr.splitlines():
+#             # 只匹配音频设备
+#             m = re.search(r'\[dshow @ [^\]]+\] +\"(.+?)\"', line)
+#             if m and 'audio devices' in line.lower():
+#                 devices.clear()  # 新一组音频设备
+#             elif m:
+#                 devices.append(m.group(1))
+#         # 优先选立体声混音
+#         for dev in devices:
+#             if '立体声混音' in dev or 'stereo mix' in dev.lower():
+#                 return dev
+#         # 再选扬声器
+#         for dev in devices:
+#             if '扬声器' in dev or 'speaker' in dev.lower():
+#                 return dev
+#         # 若没有，返回第一个音频设备
+#         if devices:
+#             return devices[0]
+#     except Exception as e:
+#         print("自动检测扬声器失败：", e)
+#     # 没有检测到任何音频设备时返回空字符串
+#     return ''
+
+# 直接返回界面选择的音频设备
+def get_speaker_device():
+    global audio_device_var
+    return audio_device_var.get()
+
 
 def start_recording():
     global ffmpeg_process, recording, video_filename, event_filename
@@ -240,13 +283,13 @@ def browse_storage_path():
         storage_path_var.set(path)
 
 def create_gui():
-    global status_var, ffmpeg_path_var, ffmpeg_status_var, storage_path_var, app  # 增加 app
+    global status_var, ffmpeg_path_var, ffmpeg_status_var, storage_path_var, app, audio_device_var
+
     app = tk.Tk()
     app.title("游戏录制器")
-    app.geometry("600x320")
+    app.geometry("600x360")
     app.resizable(False, False)
 
-    # 外层容器Frame
     main_frame = tk.Frame(app)
     main_frame.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -273,6 +316,17 @@ def create_gui():
     storage_entry = tk.Entry(storage_row, textvariable=storage_path_var, width=54, font=("Arial", 11))
     storage_entry.pack(side=tk.LEFT, padx=(0, 6))
     tk.Button(storage_row, text="浏览...", font=("Arial", 11), width=8, command=browse_storage_path).pack(side=tk.LEFT)
+
+    # 音频设备选择
+    tk.Label(main_frame, text="音频输入设备（可选）", font=("Arial", 12), anchor="w").pack(anchor="w", padx=24, pady=(14, 0))
+    audio_device_var = tk.StringVar()
+    audio_devices = list_audio_devices()
+    if audio_devices:
+        audio_device_var.set(audio_devices[0])
+    else:
+        audio_device_var.set("")
+    audio_combo = ttk.Combobox(main_frame, textvariable=audio_device_var, values=audio_devices, font=("Arial", 11), width=52, state="readonly")
+    audio_combo.pack(padx=24, pady=(2, 0))
 
     # 状态栏
     status_var = tk.StringVar()
