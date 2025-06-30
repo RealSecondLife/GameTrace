@@ -181,6 +181,7 @@ def start_recording():
 
     storage_path = get_storage_path()
     base_name = generate_filename()
+    # video_filename = os.path.join(storage_path, f"{base_name}.m4a")
     video_filename = os.path.join(storage_path, f"{base_name}.mp4")
     event_filename = os.path.join(storage_path, f"{base_name}.jsonl")
 
@@ -195,16 +196,17 @@ def start_recording():
         ffmpeg_path,
         '-y',
         '-f', 'gdigrab',
-        '-framerate', '8',
+        '-framerate', '12',
         '-video_size', f'{width}x{height}',
         '-i', 'desktop',
         '-f', 'dshow',
         '-i', f'audio={speaker_device}',
-        '-vf', 'format=yuv420p',
+        '-vf', 'format=yuv420p,scale=854:480', # 分辨率854:480(480p) 
         '-c:v', 'libx264',
         '-preset', 'ultrafast',
         '-crf', '23',
-        '-c:a', 'flac',  # 无损音频
+        # '-c:a', 'flac',  # 无损音频
+        '-c:a', 'libmp3lame', '-b:a', '128k', # mp3
         video_filename
     ]
 
