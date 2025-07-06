@@ -22,9 +22,9 @@ GameTrace is a lightweight, user-friendly tool designed for recording gameplay w
 
 First, download ffmpeg from `https://www.gyan.dev/ffmpeg/builds/packages/ffmpeg-7.0.2-full_build.7z`
 
-Second, unzip the ffmpeg file and then copy ffmpeg.exe to the root dir.
+Second, unzip the ffmpeg file and then copy `ffmpeg.exe` to the project root dir.
 
-Finally, execute the following command to pack the .exe program
+Finally, execute the following command to pack the .exe program. (use `--add-binary "ffmpeg.exe;."` to pack the ffmpeg into the final .exe file)
 
 ```bash
 pip install pynput numpy psutil
@@ -35,7 +35,7 @@ pyinstaller recorder_app.py --onefile --add-binary "ffmpeg.exe;."
 
 
 
-### Windows
+<!-- ### Windows
 
 1. Download the latest release from [Releases](https://github.com/yourusername/GameTrace/releases).  
 2. Extract the archive and run the installer.  
@@ -45,9 +45,18 @@ pyinstaller recorder_app.py --onefile --add-binary "ffmpeg.exe;."
 
 1. Download the latest release from [Releases](https://github.com/yourusername/GameTrace/releases).  
 2. Open the downloaded `.dmg` file and drag the app to your Applications folder.  
-3. Launch the app and grant necessary permissions if prompted.
+3. Launch the app and grant necessary permissions if prompted. -->
 
 ## Usage
+<!-- 
+1. Launch **GameTrace** on your system.  
+2. Follow GPT to open **立体声混音**/**Stereo Mix** in your device. If it was open, skip this step.
+3. Select your desired recording options:  
+   - Full-screen or region-specific recording.  
+   - Enable/disable keyboard and mouse input logging.  
+4. Click the **Start Recording** button to begin.  
+5. Once finished, click **Stop Recording**.  
+6. Optionally, upload your recording with the **Upload** button. -->
 
 1. Launch **GameTrace** on your system.  
 2. Follow GPT to open **立体声混音**/**Stereo Mix** in your device. If it was open, skip this step.
