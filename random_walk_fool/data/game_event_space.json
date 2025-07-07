@@ -1,0 +1,50 @@
+{
+    "Black Myth: Wukong": [
+        {
+            "type": "keyboard",
+            "action": "press",
+            "key": [
+                "D",
+                "Key.ctrl_l",
+                "f",
+                "w",
+                "s",
+                "r",
+                "A",
+                "d",
+                "e",
+                "Key.shift",
+                "E",
+                "a",
+                "Key.space"
+            ],
+            "duration": {
+                "min": 0.0019,
+                "max": 33.2082
+            },
+            "weight": 1.0
+        },
+        {
+            "type": "mouse",
+            "action": "click",
+            "button": [
+                "Button.right",
+                "Button.left"
+            ],
+            "duration": {
+                "min": 0.0559,
+                "max": 6.8959
+            },
+            "weight": 1.0
+        },
+        {
+            "type": "mouse",
+            "action": "move",
+            "distance": {
+                "min": -720,
+                "max": 1091
+            },
+            "weight": 2
+        }
+    ]
+}
