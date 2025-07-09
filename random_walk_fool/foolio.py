@@ -1,196 +1,182 @@
+import json
 import random
 import time
-import json
-from pynput import keyboard, mouse
-from pynput.mouse import Button
-from pynput.keyboard import Key
+from typing import List, Dict, Any, Union
+import pyautogui
 
-# 更新后的输入事件schema定义
-"""
-事件列表是一个JSON数组，每个事件包含以下字段：
-[
-  {
-    "type": "keyboard" | "mouse",  # 事件类型
-    "action": "press" | "press_down" | "press_up" | "click" | "move" | "scroll",  # 具体动作
-    
-    # 按键可以是单个键名或键名列表(随机选择一个)
-    "key": "a" | ["ctrl", "alt"] | ... (键盘事件需要),
-    
-    # 鼠标按钮可以是单个按钮名或按钮名列表(随机选择一个)
-    "button": "left" | ["left", "right"] (鼠标点击需要),
-    
-    "duration": {"min": 0.1, "max": 0.5} (仅press/click需要),  # 按下持续时间(秒)
-    "distance": {"min": -100, "max": 100} (仅鼠标移动需要),  # 移动距离(像素)
-    "scroll": {"min": -5, "max": 5} (仅滚轮需要),  # 滚动量
-    "weight": 1.0  # 事件权重(概率)
-  },
-  ...
-]
-"""
+# ---------- 完整 Schema 定义说明 ----------
+# 顶层字段：
+# - events: List[Event]
+#
+# Event 类型：
+# 1. Keyboard 单键事件
+#    - type: "keyboard"
+#    - keys: List[str]，候选单键
+#    - action: "press" / "hold" / "release"
+#    - hold_duration_range: [min, max]（action="hold" 时有效，单位秒）
+#    - 说明：从 keys 随机选一个键执行。
+#
+# 2. Mouse 单按钮事件
+#    - type: "mouse"
+#    - buttons: List[str]，候选按钮（"left","right","middle"）
+#    - action: "click" / "move" / "scroll"
+#      - click:
+#          - clicks: int
+#          - interval_range: [min, max]
+#      - move:
+#          - x_range: [min, max]
+#          - y_range: [min, max]
+#          - duration_range: [min, max]
+#      - scroll:
+#          - dx_range: [min, max]
+#          - dy_range: [min, max]
+#    - 说明：从 buttons 随机选一个按钮执行；move/scroll 不使用 buttons。
+#
+# 3. Combo 组合事件（可键盘多键、鼠标多按钮、或键鼠混合）
+#    - type: "combo"
+#    - description: str，可选
+#    - steps: List[Event]，按序执行，每项可为 keyboard 或 mouse 子事件
+#    - 说明：每个 step 按其 own schema 随机采样。
+#
+# ---------- 示例 JSON ----------
+# {
+#   "events": [
+#     {"type":"keyboard","keys":["a","b","c"],"action":"press"},
+#     {"type":"keyboard","keys":["x","y"],"action":"hold","hold_duration_range":[0.2,0.5]},
+#     {"type":"mouse","buttons":["left","right"],"action":"click","clicks":1,"interval_range":[0,0.1]},
+#     {"type":"mouse","action":"move","x_range":[100,400],"y_range":[100,400],"duration_range":[0.05,0.2]},
+#     {
+#       "type":"combo",
+#       "description":"复制并粘贴",
+#       "steps":[
+#         {"type":"keyboard","keys":["ctrl"],"action":"hold","hold_duration_range":[0.1,0.2]},
+#         {"type":"keyboard","keys":["c"],"action":"press"},
+#         {"type":"keyboard","keys":["v"],"action":"press"},
+#         {"type":"keyboard","keys":["ctrl"],"action":"release"}
+#       ]
+#     },
+#     {
+#       "type":"combo",
+#       "description":"按住 Ctrl 然后左键点击",
+#       "steps":[
+#         {"type":"keyboard","keys":["ctrl"],"action":"down"},
+#         {"type":"mouse","buttons":["left"],"action":"click","clicks":1,"interval_range":[0,0.1]},
+#         {"type":"keyboard","keys":["ctrl"],"action":"release"}
+#       ]
+#     }
+#   ]
+# }
 
-class EventExecutor:
-    def __init__(self, events):
-        self.mouse_controller = mouse.Controller()
-        self.keyboard_controller = keyboard.Controller()
-        self.events = events
-        self.total_weight = sum(event.get('weight', 1.0) for event in events)
-    
-    def _get_random_value(self, param_spec):
-        """从参数范围中随机生成值"""
-        if isinstance(param_spec, dict):
-            min_val = param_spec.get('min', 0)
-            max_val = param_spec.get('max', 0)
-            if isinstance(min_val, int) and isinstance(max_val, int):
-                return random.randint(min_val, max_val)
-            return random.uniform(min_val, max_val)
-        return param_spec
-    
-    def _parse_key(self, key_spec):
-        """将按键规范转换为Key对象或字符，支持单个键或键列表"""
-        if isinstance(key_spec, list):
-            # 从列表中随机选择一个键
-            return self._parse_key(random.choice(key_spec))
-        
-        try:
-            # 尝试转换为特殊键
-            return getattr(Key, key_spec)
-        except AttributeError:
-            # 普通字符键
-            return key_spec
-    
-    def _parse_button(self, button_spec):
-        """将按钮规范转换为鼠标按钮对象，支持单个按钮或按钮列表"""
-        if isinstance(button_spec, list):
-            # 从列表中随机选择一个按钮
-            return self._parse_button(random.choice(button_spec))
-        
-        return getattr(Button, button_spec)
-    
-    def select_random_event(self):
-        """根据权重随机选择一个事件"""
-        rand_val = random.uniform(0, self.total_weight)
-        cumulative = 0
-        for event in self.events:
-            cumulative += event.get('weight', 1.0)
-            if rand_val <= cumulative:
-                return event
-    
-    def execute_event(self, event):
-        """执行单个事件"""
-        event_type = event['type']
-        action = event['action']
-        
-        try:
-            if event_type == 'keyboard':
-                key = self._parse_key(event['key'])
-                
-                if action == 'press':
-                    duration = self._get_random_value(event.get('duration', {'min': 0.1, 'max': 0.3}))
-                    with self.keyboard_controller.pressed(key):
-                        time.sleep(duration)
-                elif action == 'press_down':
-                    self.keyboard_controller.press(key)
-                elif action == 'press_up':
-                    self.keyboard_controller.release(key)
-            
-            elif event_type == 'mouse':
-                if action == 'click':
-                    button = self._parse_button(event['button'])
-                    duration = self._get_random_value(event.get('duration', {'min': 0.05, 'max': 0.2}))
-                    self.mouse_controller.press(button)
-                    time.sleep(duration)
-                    self.mouse_controller.release(button)
-                
-                elif action == 'move':
-                    dx = self._get_random_value(event.get('distance', {'min': -50, 'max': 50}))
-                    dy = self._get_random_value(event.get('distance', {'min': -50, 'max': 50}))
-                    self.mouse_controller.move(dx, dy)
-                
-                elif action == 'scroll':
-                    dx = self._get_random_value(event.get('scroll', {'min': -3, 'max': 3}))
-                    dy = self._get_random_value(event.get('scroll', {'min': -3, 'max': 3}))
-                    self.mouse_controller.scroll(dx, dy)
-        
-        except Exception as e:
-            print(f"执行事件失败: {e}")
 
-    def run_random_event(self):
-        """随机选择并执行一个事件"""
-        event = self.select_random_event()
-        if event:
-            # 生成友好的事件描述
-            desc = f"{event['type']}.{event['action']}"
-            
-            if event['type'] == 'keyboard' and 'key' in event:
-                key = event['key']
-                if isinstance(key, list):
-                    desc += f" [keys: {', '.join(key)}]"
-                else:
-                    desc += f" [key: {key}]"
-            
-            if event['type'] == 'mouse' and event['action'] == 'click' and 'button' in event:
-                button = event['button']
-                if isinstance(button, list):
-                    desc += f" [buttons: {', '.join(button)}]"
-                else:
-                    desc += f" [button: {button}]"
-            
-            print(f"执行事件: {desc}")
-            self.execute_event(event)
-        else:
-            print("没有可用事件")
+def load_events(schema_json: Union[str, Dict[str, Any]]) -> List[Dict[str, Any]]:
+    if isinstance(schema_json, str):
+        data = json.loads(schema_json)
+    else:
+        data = schema_json
+    return data.get("events", [])
 
-# 示例用法
-if __name__ == "__main__":
-    # 示例事件配置（包含按键/按钮列表）
-    events_config = """
-    [
+
+def choose_key(keys: List[str]) -> str:
+    return random.choice(keys)
+
+
+def choose_button(buttons: List[str]) -> str:
+    return random.choice(buttons)
+
+
+def execute_keyboard(event: Dict[str, Any]):
+    key = choose_key(event["keys"])
+    action = event.get("action", "press")
+    if action == "press":
+        pyautogui.press(key)
+    elif action == "hold":
+        duration = random.uniform(*event.get("hold_duration_range", [0.1, 0.1]))
+        pyautogui.keyDown(key)
+        time.sleep(duration)
+        pyautogui.keyUp(key)
+    elif action == "release":
+        pyautogui.keyUp(key)
+    else:
+        raise ValueError(f"Unknown keyboard action: {action}")
+
+
+def execute_mouse(event: Dict[str, Any]):
+    action = event.get("action")
+    if action == "click":
+        button = choose_button(event.get("buttons", ["left"]))
+        clicks = event.get("clicks", 1)
+        interval = random.uniform(*event.get("interval_range", [0, 0]))
+        pyautogui.click(button=button, clicks=clicks, interval=interval)
+    elif action == "move":
+        x = random.randint(*event["x_range"])
+        y = random.randint(*event["y_range"])
+        duration = random.uniform(*event.get("duration_range", [0, 0]))
+        pyautogui.moveTo(x, y, duration=duration)
+    elif action == "scroll":
+        if event.get("dx_range"):
+            pyautogui.hscroll(random.randint(*event.get("dx_range")))
+        if event.get("dy_range"):
+            pyautogui.vscroll(random.randint(*event.get("dy_range")))
+    else:
+        raise ValueError(f"Unknown mouse action: {action}")
+
+
+def sample_and_execute(event: Dict[str, Any]) -> None:
+    etype = event.get("type")
+    if etype == "keyboard":
+        execute_keyboard(event)
+    elif etype == "mouse":
+        execute_mouse(event)
+    elif etype == "combo":
+        for step in event.get("steps", []):
+            sample_and_execute(step)
+    else:
+        raise ValueError(f"Unsupported event type: {etype}")
+
+
+def main(schema: Union[str, Dict[str, Any]], iterations: int = None):
+    events = load_events(schema)
+    if not events:
+        print("No events defined.")
+        return
+    count = 0
+    try:
+        while iterations is None or count < iterations:
+            evt = random.choice(events)
+            sample_and_execute(evt)
+            count += 1
+            time.sleep(random.uniform(0.2, 1.0))
+    except KeyboardInterrupt:
+        print("Execution stopped by user.")
+
+
+if __name__ == '__main__':
+    dct = {
+      "events": [
+        {"type":"keyboard","keys":["a","b","c"],"action":"press"},
+        {"type":"keyboard","keys":["x","y"],"action":"hold","hold_duration_range":[0.2,0.5]},
+        {"type":"mouse","buttons":["left","right"],"action":"click","clicks":1,"interval_range":[0,0.1]},
+        {"type":"mouse","action":"move","x_range":[100,400],"y_range":[100,400],"duration_range":[0.05,0.2]},
         {
-            "type": "keyboard",
-            "action": "press",
-            "key": ["a", "b", "c", "d"],
-            "duration": {"min": 0.1, "max": 0.3},
-            "weight": 2.0
+          "type":"combo",
+          "description":"复制并粘贴",
+          "steps":[
+            {"type":"keyboard","keys":["ctrl"],"action":"hold","hold_duration_range":[0.1,0.2]},
+            {"type":"keyboard","keys":["c"],"action":"press"},
+            {"type":"keyboard","keys":["v"],"action":"press"},
+            {"type":"keyboard","keys":["ctrl"],"action":"release"}
+          ]
         },
         {
-            "type": "keyboard",
-            "action": "press_down",
-            "key": ["ctrl", "shift", "alt"],
-            "weight": 1.0
-        },
-        {
-            "type": "keyboard",
-            "action": "press_up",
-            "key": ["ctrl", "shift", "alt"],
-            "weight": 1.0
-        },
-        {
-            "type": "mouse",
-            "action": "click",
-            "button": ["left", "right"],
-            "duration": {"min": 0.05, "max": 0.2},
-            "weight": 1.5
-        },
-        {
-            "type": "mouse",
-            "action": "move",
-            "distance": {"min": -100, "max": 100},
-            "weight": 3.0
-        },
-        {
-            "type": "mouse",
-            "action": "scroll",
-            "scroll": {"min": -5, "max": 5},
-            "weight": 1.0
+          "type":"combo",
+          "description":"按住 Ctrl 然后左键点击",
+          "steps":[
+            {"type":"keyboard","keys":["ctrl"],"action":"press"},
+            {"type":"mouse","buttons":["left"],"action":"click","clicks":1,"interval_range":[0,0.1]},
+            {"type":"keyboard","keys":["ctrl"],"action":"release"}
+          ]
         }
-    ]
-    """
-    
-    # 加载事件配置
-    events = json.loads(events_config)
-    executor = EventExecutor(events)
-    
-    # 执行10个随机事件
-    for i in range(10):
-        executor.run_random_event()
-        time.sleep(0.5)  # 事件间暂停
+      ]
+    }
+    main(dct)
+
