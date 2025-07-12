@@ -4,7 +4,7 @@
 a = Analysis(
     ['recorder_app.py'],
     pathex=[],
-    binaries=[('ffmpeg.exe', '.')],
+    binaries=[('C:\\Users\\wyw\\Desktop\\ffmpeg\\bin\\ffmpeg.exe', '.')],
     datas=[],
     hiddenimports=[],
     hookspath=[],

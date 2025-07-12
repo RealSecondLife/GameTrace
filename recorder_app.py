@@ -40,7 +40,14 @@ def get_ffmpeg_path():
     else:
         local_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ffmpeg.exe")
     if os.path.exists(local_path):
+        # 本地不存在 ffmpeg.exe
         return local_path
+    else:
+        # 查看系统 PATH 中是否存在 ffmpeg
+        # shutil.which 会返回第一个找到的可执行文件路径
+        ffmpeg_in_path = shutil.which("ffmpeg")
+        if os.path.exists(ffmpeg_in_path):
+            return ffmpeg_in_path
     return ""
 
 def write_event(event):
@@ -102,9 +109,9 @@ def get_resolution_scale(resolution, screen_width, screen_height):
         target_width, target_height = scale_size
         # 如果用户选择的分辨率大于屏幕，就用屏幕分辨率
         if target_width > screen_width or target_height > screen_height:
-            return (screen_width, screen_height)
+            return (scale_size, screen_width, screen_height)
         else:
-            return (target_width, target_height)
+            return (scale_size, target_width, target_height)
     else:
         # 无损模式：直接返回屏幕分辨率
         scale_size = (screen_width, screen_height)
@@ -306,7 +313,7 @@ def create_gui():
     # 启动时检查 ffmpeg 是否存在
     ffmpeg_path = get_ffmpeg_path()
     if not os.path.exists(ffmpeg_path):
-        messagebox.showerror("错误", "未找到 ffmpeg.exe，请将其放在程序所在目录下。")
+        messagebox.showerror("错误", "未找到 ffmpeg.exe，请将其放在程序所在目录下,或在系统变量中指定ffmpeg安装路径。")
         sys.exit(1)
 
     app = tk.Tk()
