@@ -218,23 +218,23 @@ def start_recording():
     #     video_filename
     # ]
     
-    ffmpeg_cmd = [
-        ffmpeg_path,
-        '-y',
-        '-f', 'gdigrab',
-        '-framerate', '12',  # 可以提高到 30，看 CPU 承受能力
-        '-video_size', f'{width}x{height}',
-        '-i', 'desktop',
-        '-f', 'dshow',
-        '-i', f'audio={speaker_device}',
-        '-vf', 'format=yuv444p',  # 更高质量像素格式
-        '-c:v', 'libx264',
-        '-preset', 'ultrafast',
-        '-crf', '0',  # 0 表示无损压缩
-        '-pix_fmt', 'yuv444p',
-        '-c:a', 'libmp3lame', '-b:a', '192k',  # 可选更高音频比特率
-        video_filename
-    ]
+    # ffmpeg_cmd = [
+    #     ffmpeg_path,
+    #     '-y',
+    #     '-f', 'gdigrab',
+    #     '-framerate', '12',  # 可以提高到 30，看 CPU 承受能力
+    #     '-video_size', f'{width}x{height}',
+    #     '-i', 'desktop',
+    #     '-f', 'dshow',
+    #     '-i', f'audio={speaker_device}',
+    #     '-vf', 'format=yuv444p',  # 更高质量像素格式
+    #     '-c:v', 'libx264',
+    #     '-preset', 'ultrafast',
+    #     '-crf', '0',  # 0 表示无损压缩
+    #     '-pix_fmt', 'yuv444p',
+    #     '-c:a', 'libmp3lame', '-b:a', '192k',  # 可选更高音频比特率
+    #     video_filename
+    # ]
 
     ffmpeg_process = subprocess.Popen(ffmpeg_cmd, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     recording = True
