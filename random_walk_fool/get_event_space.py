@@ -1,197 +1,231 @@
 import json
-import math
+from collections import defaultdict
+
+# --- 常量定义 ---
+HOLD_THRESHOLD = 0.15 
 
 def summarize_user_actions(file_path):
-    """
-    分析用户行为日志 (jsonl)，总结成结构化的事件列表。
-
-    Args:
-        file_path (str): 输入的 jsonl 文件路径。
-
-    Returns:
-        list: 包含总结后行为信息的字典列表。
-    """
-    # ----- 1. 初始化数据存储结构 -----
-    
-    # 键盘事件相关
-    key_press_events = {}  # 存储 {key: press_time}
-    key_actions = {
-        "press": {"keys": set(), "durations": []},
-        "press_down": {"keys": set()},
-        "press_up": {"keys": set()},
-    }
-    modifier_keys = {"ctrl", "shift", "alt", "cmd", "win"} # 定义修饰键
-
-    # 鼠标事件相关
-    mouse_press_events = {} # 存储 {button: press_time}
-    mouse_actions = {
-        "click": {"buttons": set(), "durations": []},
-        "move": {"distances_x": [], "distances_y": []},
-        "scroll": {"scrolls": []},
-    }
-    last_mouse_position = None
-    
-    # 原始事件计数器，用于计算权重
-    action_counts = {
-        "keyboard_press": 0,
-        "keyboard_press_down": 0,
-        "keyboard_press_up": 0,
-        "mouse_click": 0,
-        "mouse_move": 0,
-        "mouse_scroll": 0
-    }
-
-    # ----- 2. 逐行读取和处理日志文件 -----
+    raw_events = []
     try:
         with open(file_path, 'r', encoding='utf-8') as f:
-            for line in f:
+            # 使用 enumerate 可以方便地在出错时报告行号
+            for line_number, line in enumerate(f, 1):
+                # 跳过空行
+                if not line.strip():
+                    continue
                 try:
-                    event = json.loads(line.strip())
-                    event_type = event.get("type")
-                    event_time = event.get("time")
-
-                    # --- 处理键盘事件 ---
-                    if event_type == "key_press":
-                        key = event.get("key")
-                        if key:
-                            key_press_events[key] = event_time
-                            if key in modifier_keys:
-                                key_actions["press_down"]["keys"].add(key)
-                                action_counts["keyboard_press_down"] += 1
-                            else:
-                                # 这是为 'press' 动作做准备，但只有在 release 时才记录
-                                pass
-
-                    elif event_type == "key_release":
-                        key = event.get("key")
-                        if key and key in key_press_events:
-                            duration = event_time - key_press_events.pop(key)
-                            if key in modifier_keys:
-                                key_actions["press_up"]["keys"].add(key)
-                                action_counts["keyboard_press_up"] += 1
-                            else:
-                                key_actions["press"]["keys"].add(key)
-                                key_actions["press"]["durations"].append(duration)
-                                action_counts["keyboard_press"] += 1
+                    # 尝试解析当前行
+                    event = json.loads(line)
+                    raw_events.append(event)
+                except json.JSONDecodeError as e:
+                    # 如果仅当前行解析失败，打印警告并跳过，继续处理下一行
+                    print(f"警告：第 {line_number} 行JSON解析失败，已跳过。错误：{e}")
+                    print(f"   --> 内容: {line.strip()}")
                     
-                    # --- 处理鼠标事件 ---
-                    elif event_type == "mouse_press":
-                        button = event.get("button", "left") # 默认为左键
-                        mouse_press_events[button] = event_time
-
-                    elif event_type == "mouse_release":
-                        button = event.get("button", "left")
-                        if button in mouse_press_events:
-                            duration = event_time - mouse_press_events.pop(button)
-                            mouse_actions["click"]["buttons"].add(button)
-                            mouse_actions["click"]["durations"].append(duration)
-                            action_counts["mouse_click"] += 1
-
-                    elif event_type == "mouse_move":
-                        position = event.get("position")
-                        if position and last_mouse_position:
-                            dx = position[0] - last_mouse_position[0]
-                            dy = position[1] - last_mouse_position[1]
-                            mouse_actions["move"]["distances_x"].append(dx)
-                            mouse_actions["move"]["distances_y"].append(dy)
-                        last_mouse_position = position
-                        action_counts["mouse_move"] += 1
-                        
-                    elif event_type == "mouse_scroll":
-                        scroll_amount = event.get("scroll")
-                        if scroll_amount:
-                           mouse_actions["scroll"]["scrolls"].append(scroll_amount)
-                           action_counts["mouse_scroll"] += 1
-
-                except json.JSONDecodeError:
-                    print(f"警告：无法解析行: {line.strip()}")
-
     except FileNotFoundError:
         print(f"错误：文件未找到: {file_path}")
-        return []
+        return {}
 
-    # ----- 3. 整理和计算最终结果 -----
-    summary = []
-    total_actions = sum(action_counts.values())
 
-    def get_weight(action_name):
-        return round(action_counts.get(action_name, 0) / total_actions if total_actions > 0 else 0, 2)
+    # 1. 事件分组
+    event_groups = []
+    consumed_indices = set()
+    i = 0
+    while i < len(raw_events):
+        if i in consumed_indices: i += 1; continue
+        event = raw_events[i]
+        
+        if event['type'] in ['mouse_move', 'mouse_scroll']:
+            event_groups.append([event]); consumed_indices.add(i); i += 1; continue
 
-    # 键盘 - press
-    if key_actions["press"]["keys"]:
-        summary.append({
-            "type": "keyboard",
-            "action": "press",
-            "key": list(key_actions["press"]["keys"]),
-            "duration": {
-                "min": round(min(key_actions["press"]["durations"]), 4) if key_actions["press"]["durations"] else 0.0,
-                "max": round(max(key_actions["press"]["durations"]), 4) if key_actions["press"]["durations"] else 0.0,
-            },
-            "weight": get_weight("keyboard_press")
-        })
+        if event['type'].endswith('_press'):
+            group, end_index = extract_action_group(raw_events, i)
+            if group:
+                event_groups.append(group)
+                for j in range(i, end_index + 1): consumed_indices.add(j)
+                i = end_index + 1
+            else: i += 1
+        else: i += 1
+            
+    # 2. 处理分组
+    processed_events = []
+    for group in event_groups:
+        events_from_group = process_group_to_schema_v4(group)
+        processed_events.extend(events_from_group)
+                
+    # 3. 聚合
+    final_events = aggregate_simple_events_v3(processed_events)
+    return {"events": final_events}
 
-    # 键盘 - press_down
-    if key_actions["press_down"]["keys"]:
-        summary.append({
-            "type": "keyboard",
-            "action": "press_down",
-            "key": list(key_actions["press_down"]["keys"]),
-            "weight": get_weight("keyboard_press_down")
-        })
+def extract_action_group(events, start_index):
+    """与之前版本相同：提取一个完整的动作组。"""
+    group, active_holds = [], {}
+    initial_event = events[start_index]
+    actor = initial_event.get('key') or initial_event.get('button', 'left')
+    active_holds[actor] = initial_event
+    group.append(initial_event)
+    
+    for i in range(start_index + 1, len(events)):
+        event = events[i]
+        group.append(event)
+        evt_type = event['type']
+        
+        if evt_type.endswith('_press'):
+            actor = event.get('key') or event.get('button', 'left')
+            if actor not in active_holds: active_holds[actor] = event
+        elif evt_type.endswith('_release'):
+            actor = event.get('key') or event.get('button', 'left')
+            if actor in active_holds: del active_holds[actor]
+        
+        if not active_holds: return group, i
+            
+    return group, len(events) - 1
 
-    # 键盘 - press_up
-    if key_actions["press_up"]["keys"]:
-        summary.append({
-            "type": "keyboard",
-            "action": "press_up",
-            "key": list(key_actions["press_up"]["keys"]),
-            "weight": get_weight("keyboard_press_up")
-        })
+def process_group_to_schema_v4(group):
+    """
+    v4: 智能区分 combo 内的 "wrapper" (down/release) 和 "inner" (press) 行为。
+    """
+    if not group: return []
+    
+    events_to_return = []
+    actors_pressed = {e.get('key') or e.get('button', 'left') for e in group if e['type'].endswith('_press')}
+    is_combo = len(actors_pressed) > 1
 
-    # 鼠标 - click
-    if mouse_actions["click"]["buttons"]:
-        summary.append({
-            "type": "mouse",
-            "action": "click",
-            "button": list(mouse_actions["click"]["buttons"]),
-            "duration": {
-                "min": round(min(mouse_actions["click"]["durations"]), 4) if mouse_actions["click"]["durations"] else 0.0,
-                "max": round(max(mouse_actions["click"]["durations"]), 4) if mouse_actions["click"]["durations"] else 0.0,
-            },
-            "weight": get_weight("mouse_click")
-        })
+    if is_combo:
+        # --- 1. 创建更智能的 Combo 对象 ---
+        steps_with_time = []
+        
+        # a. 聚合鼠标移动
+        combo_moves = [e for e in group if e['type'] == 'mouse_move']
+        if combo_moves:
+            first_move, last_move = combo_moves[0], combo_moves[-1]
+            total_dx = last_move['position'][0] - first_move['position'][0]
+            total_dy = last_move['position'][1] - first_move['position'][1]
+            duration = max(0.0, last_move['time'] - first_move['time'])
+            move_step = { "type": "mouse", "action": "move", "x_range": sorted([0, total_dx]), "y_range": sorted([0, total_dy]), "duration_range": [duration, duration] }
+            steps_with_time.append({'time': first_move['time'], 'data': move_step})
+            
+        # b. 区分 wrapper 和 inner 键盘/鼠标行为
+        actor_event_map = defaultdict(list)
+        for e in group:
+            if e['type'].endswith(('_press', '_release')):
+                actor = e.get('key') or e.get('button', 'left')
+                actor_event_map[actor].append(e)
 
-    # 鼠标 - move
-    if mouse_actions["move"]["distances_x"]:
-        # 为了简化输出，这里可以考虑将x和y的移动范围合并
-        # 或者分别提供。这里我们提供一个综合的范围。
-        all_distances = mouse_actions["move"]["distances_x"] + mouse_actions["move"]["distances_y"]
-        summary.append({
-            "type": "mouse",
-            "action": "move",
-            "distance": {
-                "min": min(all_distances),
-                "max": max(all_distances),
-            },
-            "weight": get_weight("mouse_move")
-        })
+        combo_start_time, combo_end_time = group[0]['time'], group[-1]['time']
+        
+        for actor, event_list in actor_event_map.items():
+            presses = sorted([e for e in event_list if e['type'].endswith('_press')], key=lambda x: x['time'])
+            if not presses: continue
+            first_press = presses[0]
+            release = next((e for e in sorted(event_list, key=lambda x:x['time']) if e['type'].endswith('_release') and e['time'] > first_press['time']), None)
+            
+            # 判断是 "inner" 还是 "wrapper"
+            is_wrapper = True
+            if release:
+                duration = release['time'] - first_press['time']
+                # 如果动作时间短，并且不是在 combo 的边缘发生，则认为是 inner
+                if duration < HOLD_THRESHOLD and (first_press['time'] - combo_start_time > 0.01) and (combo_end_time - release['time'] > 0.01):
+                    is_wrapper = False
+            
+            # c. 创建步骤
+            actor_type = "keyboard" if 'key' in first_press else "mouse"
+            actor_key_name = "keys" if actor_type == "keyboard" else "buttons"
 
-    # 鼠标 - scroll
-    if mouse_actions["scroll"]["scrolls"]:
-        summary.append({
-            "type": "mouse",
-            "action": "scroll",
-            "scroll": {
-                "min": min(mouse_actions["scroll"]["scrolls"]),
-                "max": max(mouse_actions["scroll"]["scrolls"]),
-            },
-            "weight": get_weight("mouse_scroll")
-        })
+            if is_wrapper:
+                steps_with_time.append({'time': first_press['time'], 'data': {"type": actor_type, "action": "down", actor_key_name: [actor]}})
+                if release:
+                    steps_with_time.append({'time': release['time'], 'data': {"type": actor_type, "action": "release", actor_key_name: [actor]}})
+            else: # Inner action
+                if actor_type == "keyboard":
+                    steps_with_time.append({'time': first_press['time'], 'data': {"type": "keyboard", "action": "press", "keys": [actor]}})
+                else:
+                    steps_with_time.append({'time': first_press['time'], 'data': {"type": "mouse", "action": "click", "buttons": [actor], "clicks": 1, "interval_range": [duration, duration]}})
 
-    return summary
+        steps_with_time.sort(key=lambda x: x['time'])
+        final_steps = [s['data'] for s in steps_with_time]
+        desc = "Combo: " + " + ".join(sorted(list(actors_pressed)))
+        events_to_return.append({"type": "combo", "description": desc, "steps": final_steps})
+
+    # --- 2. 提取所有独立的按键/点击行为 (无论是否是 combo) ---
+    # (此部分逻辑与上一版相同，以实现事件双重记录)
+    actor_event_map_for_simple = defaultdict(list)
+    for e in group:
+        if e['type'].endswith(('_press', '_release')):
+            actor = e.get('key') or e.get('button', 'left')
+            actor_event_map_for_simple[actor].append(e)
+
+    for actor, event_list in actor_event_map_for_simple.items():
+        presses = sorted([e for e in event_list if e['type'].endswith('_press')], key=lambda x: x['time'])
+        if not presses: continue
+        releases = sorted([e for e in event_list if e['type'].endswith('_release')], key=lambda x: x['time'])
+        
+        first_press, last_release = presses[0], releases[-1] if releases else None
+        
+        is_hold = (len(presses) > 1) or (not last_release)
+        duration = (last_release['time'] if last_release else group[-1]['time']) - first_press['time']
+        if duration >= HOLD_THRESHOLD: is_hold = True
+
+        if 'key' in first_press:
+            action = "hold" if is_hold else "press"
+            simple_event = {"type": "keyboard", "action": action, "keys": [actor]}
+            if action == "hold": simple_event["hold_duration"] = duration
+        else:
+            simple_event = {"type": "mouse", "action": "click", "buttons": [actor], "click_duration": duration}
+        
+        events_to_return.append(simple_event)
+
+    # 3. 处理独立的 move/scroll
+    if not actor_event_map_for_simple and group:
+        event = group[0]
+        if event['type'] == 'mouse_move': events_to_return.append({"type": "mouse", "action": "move", "raw_event": event})
+        elif event['type'] == 'mouse_scroll': events_to_return.append({"type": "mouse", "action": "scroll", "dx": 0, "dy": event.get('scroll', 0)})
+
+    return events_to_return
+
+
+def aggregate_simple_events_v3(events):
+    """与上一版相同：聚合所有简单事件，并分离出 combo。"""
+    aggregated = defaultdict(lambda: defaultdict(list))
+    combos = [e for e in events if e['type'] == 'combo']
+    simple_events = [e for e in events if e['type'] != 'combo']
+    
+    last_pos = None
+    for e in simple_events:
+        action = e['action']
+        if e['type'] == 'keyboard':
+            aggregated[f'keyboard_{action}']['keys'].extend(e['keys'])
+            if 'hold_duration' in e: aggregated[f'keyboard_{action}']['durations'].append(e['hold_duration'])
+        elif e['type'] == 'mouse':
+            if action == 'click':
+                aggregated['mouse_click']['buttons'].extend(e['buttons'])
+                aggregated['mouse_click']['durations'].append(e['click_duration'])
+            elif action == 'scroll':
+                aggregated['mouse_scroll']['dx'].append(e['dx'])
+                aggregated['mouse_scroll']['dy'].append(e['dy'])
+            elif action == 'move' and 'raw_event' in e:
+                pos = e['raw_event']['position']
+                if last_pos:
+                    aggregated['mouse_move']['x'].append(pos[0] - last_pos[0])
+                    aggregated['mouse_move']['y'].append(pos[1] - last_pos[1])
+                last_pos = pos
+
+    output = []
+    # Keyboard
+    if aggregated['keyboard_press']['keys']: output.append({"type":"keyboard", "keys":sorted(list(set(aggregated['keyboard_press']['keys']))), "action":"press"})
+    if aggregated['keyboard_hold']['keys']:
+        d = aggregated['keyboard_hold']['durations']
+        output.append({"type":"keyboard", "keys":sorted(list(set(aggregated['keyboard_hold']['keys']))), "action":"hold", "hold_duration_range":[min(d), max(d)]})
+    # Mouse
+    if aggregated['mouse_click']['buttons']:
+        d = aggregated['mouse_click']['durations']
+        output.append({"type":"mouse", "buttons":sorted(list(set(aggregated['mouse_click']['buttons']))), "action":"click", "clicks":1, "interval_range":[min(d), max(d)]})
+    
+    output.extend(combos)
+    return output
 
 # Example usage based on the uploaded file
-file_path = "C:\\Users\\59681\\OneDrive\\桌面\\game trace\\GameTrace-main\\GameTrace-main\\data\\record_20250707_171253.jsonl"
+file_path = "C:\\Users\\59681\\OneDrive\\桌面\\game trace\\GameTrace-main\\GameTrace-main\\data\\record_20250714_173014.jsonl"
 
 # Get the summary of actions
 summary = summarize_user_actions(file_path)

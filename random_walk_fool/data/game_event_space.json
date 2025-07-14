@@ -1,50 +1,371 @@
 {
-    "Black Myth: Wukong": [
-        {
-            "type": "keyboard",
-            "action": "press",
-            "key": [
-                "D",
-                "Key.ctrl_l",
-                "f",
-                "w",
-                "s",
-                "r",
-                "A",
-                "d",
-                "e",
-                "Key.shift",
-                "E",
-                "a",
-                "Key.space"
-            ],
-            "duration": {
-                "min": 0.0019,
-                "max": 33.2082
+    "Black Myth: Wukong": {
+        "events": [
+            {
+                "type": "keyboard",
+                "keys": [
+                    "1",
+                    "2",
+                    "3",
+                    "4",
+                    "Key.esc",
+                    "e",
+                    "f",
+                    "q",
+                    "r"
+                ],
+                "action": "press"
             },
-            "weight": 1.0
-        },
-        {
-            "type": "mouse",
-            "action": "click",
-            "button": [
-                "Button.right",
-                "Button.left"
-            ],
-            "duration": {
-                "min": 0.0559,
-                "max": 6.8959
+            {
+                "type": "keyboard",
+                "keys": [
+                    "A",
+                    "D",
+                    "Key.ctrl_l",
+                    "Key.shift",
+                    "W",
+                    "a",
+                    "d",
+                    "s",
+                    "w"
+                ],
+                "action": "hold",
+                "hold_duration_range": [
+                    0.5900106430053711,
+                    4.957849502563477
+                ]
             },
-            "weight": 1.0
-        },
-        {
-            "type": "mouse",
-            "action": "move",
-            "distance": {
-                "min": -720,
-                "max": 1091
+            {
+                "type": "mouse",
+                "buttons": [
+                    "Button.left",
+                    "Button.right"
+                ],
+                "action": "click",
+                "clicks": 1,
+                "interval_range": [
+                    0.04611992835998535,
+                    8.198332786560059
+                ]
             },
-            "weight": 2
-        }
-    ]
+            {
+                "type": "combo",
+                "description": "Combo: Key.shift + W",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "W"
+                        ]
+                    },
+                    {
+                        "type": "mouse",
+                        "action": "move",
+                        "x_range": [
+                            -5,
+                            0
+                        ],
+                        "y_range": [
+                            -3,
+                            0
+                        ],
+                        "duration_range": [
+                            3.9890940189361572,
+                            3.9890940189361572
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "W"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: A + Key.shift",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "A"
+                        ]
+                    },
+                    {
+                        "type": "mouse",
+                        "action": "move",
+                        "x_range": [
+                            0,
+                            1
+                        ],
+                        "y_range": [
+                            -2,
+                            0
+                        ],
+                        "duration_range": [
+                            0.17186832427978516,
+                            0.17186832427978516
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "A"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: D + Key.shift",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    },
+                    {
+                        "type": "mouse",
+                        "action": "move",
+                        "x_range": [
+                            0,
+                            0
+                        ],
+                        "y_range": [
+                            -2,
+                            0
+                        ],
+                        "duration_range": [
+                            0.2709469795227051,
+                            0.2709469795227051
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "D"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "D"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.shift"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: Key.ctrl_l + w",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "w"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "mouse",
+                        "action": "move",
+                        "x_range": [
+                            0,
+                            0
+                        ],
+                        "y_range": [
+                            0,
+                            1
+                        ],
+                        "duration_range": [
+                            0.026123046875,
+                            0.026123046875
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "w"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: Key.ctrl_l + d",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "d"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "d"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: Key.ctrl_l + a",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "a"
+                        ]
+                    },
+                    {
+                        "type": "mouse",
+                        "action": "move",
+                        "x_range": [
+                            -2,
+                            0
+                        ],
+                        "y_range": [
+                            0,
+                            1
+                        ],
+                        "duration_range": [
+                            0.4271097183227539,
+                            0.4271097183227539
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "a"
+                        ]
+                    }
+                ]
+            },
+            {
+                "type": "combo",
+                "description": "Combo: Key.ctrl_l + s",
+                "steps": [
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "s"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "down",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "Key.ctrl_l"
+                        ]
+                    },
+                    {
+                        "type": "keyboard",
+                        "action": "release",
+                        "keys": [
+                            "s"
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
 }
