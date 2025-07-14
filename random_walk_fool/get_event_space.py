@@ -225,13 +225,16 @@ def aggregate_simple_events_v3(events):
     return output
 
 # Example usage based on the uploaded file
-file_path = "C:\\Users\\59681\\OneDrive\\桌面\\game trace\\GameTrace-main\\GameTrace-main\\data\\record_20250714_173014.jsonl"
-
-# Get the summary of actions
-summary = summarize_user_actions(file_path)
-
-game_name = "Black Myth: Wukong"
+file_paths = [
+    ("C:\\Users\\59681\\OneDrive\\桌面\\game trace\\GameTrace-main\\GameTrace-main\\data\\record_20250714_173014.jsonl", "Black Myth: Wukong")
+    ]
 output_path = "data\game_event_space.json"
+final_res = {}
+for file_path, game_name in file_paths:
+    # Get the summary of actions
+    summary = summarize_user_actions(file_path)
+    final_res[game_name] = summary
+    
 # Output the summary as JSON
 with open(output_path, "w") as f_out:
-    f_out.write(json.dumps({game_name: summary}, indent=4))
+    f_out.write(json.dumps(final_res, indent=4))
